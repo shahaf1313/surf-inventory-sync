@@ -1,0 +1,41 @@
+name: Build Windows EXE
+
+# Builds on an actual windows-latest GitHub-hosted runner - not a
+# cross-compile/Wine build - since Tkinter/matplotlib packaging really
+# needs to happen on the target OS to come out right.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "src/**"
+      - "run_app.py"
+      - "requirements.txt"
+      - ".github/workflows/build-windows-exe.yml"
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build EXE
+        run: |
+          pyinstaller --onefile --windowed --name SurfInventorySync run_app.py
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SurfInventorySync-windows
+          path: dist/SurfInventorySync.exe
+          retention-days: 90
