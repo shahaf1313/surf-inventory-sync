@@ -1,0 +1,276 @@
+"""Desktop UI (Tkinter - ships with standard Python on Windows, no extra
+install needed). Two tabs:
+
+  - "המרה" (Convert): pick the manufacturer file, preview what will be
+    exported, and save the Rivhit file.
+  - "הגדרות" (Settings): the exchange rate and the starting item number,
+    both entered by hand each run per the user's workflow. Values are
+    pre-filled from the last run as a convenience default, but always
+    editable.
+
+Business logic lives in conversion.py/rivhit_format.py/source_parser.py and
+is unit-tested there; this module is a thin, mostly-untested UI layer over
+it (Tkinter widgets aren't practical to unit test - keep this file simple
+and push any real logic down into the tested modules instead).
+"""
+
+from __future__ import annotations
+
+import tkinter as tk
+from pathlib import Path
+from tkinter import filedialog, messagebox, ttk
+
+from bidi.algorithm import get_display
+
+from .config import Settings, load_settings, save_settings
+from .conversion import ConversionResult, export_to_rivhit_file, run_conversion
+
+APP_TITLE = "עדכוני מלאי North Kiteboarding → רווחית"
+
+
+def rtl(text: str) -> str:
+    """Reorder text (Hebrew, or mixed Hebrew/Latin/numbers) into visual
+    left-to-right glyph order for display in Tk widgets.
+
+    Tk draws text as a flat glyph run with no Unicode Bidirectional
+    Algorithm support (confirmed via screenshot during development -
+    Hebrew rendered mirrored/reversed), and this is a known limitation of
+    Tk generally, not specific to the Linux box this was built on. Every
+    Hebrew-containing string handed to a Tk widget must go through this.
+    If dad's actual Windows machine turns out to render correctly without
+    it, that'd be surprising - but easy to spot (text would look doubly-
+    reversed) and to remove if so.
+    """
+    # Reorder each line independently - running the algorithm across an
+    # embedded newline can bleed direction across lines incorrectly.
+    return "\n".join(get_display(line) for line in text.split("\n"))
+
+
+class App(tk.Tk):
+    def __init__(self) -> None:
+        super().__init__()
+        self.title(rtl(APP_TITLE))
+        self.geometry("900x600")
+
+        self.settings = load_settings()
+        self.selected_file: Path | None = None
+        self.last_result: ConversionResult | None = None
+
+        notebook = ttk.Notebook(self)
+        notebook.pack(fill="both", expand=True, padx=8, pady=8)
+
+        self.convert_tab = ttk.Frame(notebook)
+        self.settings_tab = ttk.Frame(notebook)
+        notebook.add(self.convert_tab, text=rtl("המרה"))
+        notebook.add(self.settings_tab, text=rtl("הגדרות"))
+
+        self._build_settings_tab()
+        self._build_convert_tab()
+
+    # ---------------------------------------------------------------- settings tab
+    def _build_settings_tab(self) -> None:
+        frame = self.settings_tab
+        pad = {"padx": 10, "pady": 8}
+
+        ttk.Label(
+            frame,
+            text=rtl("שער המרה (מחיר רווחית = שער × Suggested Retail Price מקובץ היצרן)"),
+            justify="right",
+        ).grid(row=0, column=1, sticky="e", **pad)
+        self.exchange_rate_var = tk.StringVar(value=str(self.settings.exchange_rate))
+        ttk.Entry(frame, textvariable=self.exchange_rate_var, width=15, justify="right").grid(
+            row=0, column=0, sticky="w", **pad
+        )
+
+        ttk.Label(frame, text=rtl("מספר פריט התחלתי ברווחית"), justify="right").grid(
+            row=1, column=1, sticky="e", **pad
+        )
+        self.start_id_var = tk.StringVar(value=str(self.settings.next_item_number))
+        ttk.Entry(frame, textvariable=self.start_id_var, width=15, justify="right").grid(
+            row=1, column=0, sticky="w", **pad
+        )
+
+        ttk.Label(
+            frame,
+            text=rtl(
+                "שני השדות ניתנים לעריכה בכל המרה. הערכים כאן הם רק ברירת מחדל\n"
+                "(מתעדכנים אוטומטית אחרי ייצוא מוצלח, לפי המספר הבא בתור)."
+            ),
+            justify="right",
+            foreground="#666",
+        ).grid(row=2, column=0, columnspan=2, sticky="e", padx=10, pady=(20, 0))
+
+    def _read_settings_from_ui(self) -> tuple[float, int]:
+        """Parse and validate the settings fields; raises ValueError with a
+        Hebrew message on bad input."""
+        try:
+            exchange_rate = float(self.exchange_rate_var.get())
+        except ValueError:
+            raise ValueError("שער ההמרה חייב להיות מספר (למשל 3.7)") from None
+        if exchange_rate <= 0:
+            raise ValueError("שער ההמרה חייב להיות גדול מאפס")
+
+        try:
+            start_id = int(self.start_id_var.get())
+        except ValueError:
+            raise ValueError("מספר הפריט ההתחלתי חייב להיות מספר שלם") from None
+        if start_id <= 0:
+            raise ValueError("מספר הפריט ההתחלתי חייב להיות גדול מאפס")
+
+        return exchange_rate, start_id
+
+    # ---------------------------------------------------------------- convert tab
+    def _build_convert_tab(self) -> None:
+        frame = self.convert_tab
+
+        top = ttk.Frame(frame)
+        top.pack(fill="x", padx=10, pady=10)
+
+        self.file_label_var = tk.StringVar(value=rtl("לא נבחר קובץ"))
+        ttk.Button(top, text=rtl("בחר קובץ מהיצרן..."), command=self._on_pick_file).pack(
+            side="right"
+        )
+        ttk.Label(top, textvariable=self.file_label_var, justify="right").pack(
+            side="right", padx=10
+        )
+
+        self.run_button = ttk.Button(
+            top, text=rtl("הרץ המרה"), command=self._on_run_conversion, state="disabled"
+        )
+        self.run_button.pack(side="right", padx=10)
+
+        self.summary_var = tk.StringVar(value="")
+        ttk.Label(frame, textvariable=self.summary_var, justify="right", foreground="#333").pack(
+            fill="x", padx=10
+        )
+
+        self.warning_var = tk.StringVar(value="")
+        ttk.Label(frame, textvariable=self.warning_var, justify="right", foreground="#b30000").pack(
+            fill="x", padx=10
+        )
+
+        columns = ("item_number", "price", "size", "color", "description", "item_code")
+        headers = {
+            "item_number": "מס' פריט",
+            "price": "מחיר",
+            "size": "מידה",
+            "color": "צבע",
+            "description": "תיאור",
+            "item_code": 'מק"ט יצרן',
+        }
+        self.tree = ttk.Treeview(frame, columns=columns, show="headings")
+        for col in columns:
+            self.tree.heading(col, text=rtl(headers[col]))
+            self.tree.column(col, width=120, anchor="e")
+        self.tree.pack(fill="both", expand=True, padx=10, pady=10)
+
+        self.export_button = ttk.Button(
+            frame, text=rtl("שמור קובץ לרווחית..."), command=self._on_export, state="disabled"
+        )
+        self.export_button.pack(padx=10, pady=(0, 10), anchor="e")
+
+    def _on_pick_file(self) -> None:
+        path = filedialog.askopenfilename(
+            title=rtl("בחר את קובץ ההזמנה מהיצרן"),
+            filetypes=[("Excel files", "*.xlsx *.xls"), (rtl("כל הקבצים"), "*.*")],
+        )
+        if not path:
+            return
+        self.selected_file = Path(path)
+        self.file_label_var.set(self.selected_file.name)
+        self.run_button.configure(state="normal")
+
+    def _on_run_conversion(self) -> None:
+        if self.selected_file is None:
+            return
+        try:
+            exchange_rate, start_id = self._read_settings_from_ui()
+        except ValueError as exc:
+            messagebox.showerror(rtl("קלט לא תקין"), rtl(str(exc)))
+            return
+
+        try:
+            result = run_conversion(
+                self.selected_file, exchange_rate=exchange_rate, start_item_number=start_id
+            )
+        except Exception as exc:  # noqa: BLE001 - surface any parsing failure to the user
+            messagebox.showerror(rtl("שגיאה בקריאת הקובץ"), rtl(f"לא הצלחתי לקרוא את הקובץ:\n{exc}"))
+            return
+
+        self.last_result = result
+        self._populate_preview(result)
+        self.export_button.configure(state="normal" if result.rivhit_rows else "disabled")
+
+    def _populate_preview(self, result: ConversionResult) -> None:
+        self.tree.delete(*self.tree.get_children())
+        for row in result.rivhit_rows:
+            self.tree.insert(
+                "",
+                "end",
+                values=(
+                    row.rivhit_item_number,
+                    "" if row.price is None else f"{row.price:,.2f}",
+                    row.size,
+                    row.color_description,
+                    row.description,
+                    row.manufacturer_item_code,
+                ),
+            )
+
+        summary = (
+            f'נמצאו {len(result.all_products)} שורות בקובץ היצרן, מתוכן {len(result.new_products)} '
+            f'חדשות / מידה חדשה שיוכנסו לרווחית (מספרים {result.rivhit_rows[0].rivhit_item_number}'
+            f"-{result.rivhit_rows[-1].rivhit_item_number})"
+            if result.rivhit_rows
+            else f"נמצאו {len(result.all_products)} שורות בקובץ היצרן, ואף לא אחת מסומנת כחדשה/מידה חדשה"
+        )
+        self.summary_var.set(rtl(summary))
+
+        if result.missing_retail_price:
+            warning = (
+                f"שים לב: {len(result.missing_retail_price)} פריטים חדשים בלי מחיר קמעונאי בקובץ "
+                "המקור - המחיר שלהם יישאר ריק, כדאי לבדוק ידנית"
+            )
+            self.warning_var.set(rtl(warning))
+        else:
+            self.warning_var.set("")
+
+    def _on_export(self) -> None:
+        if self.last_result is None or not self.last_result.rivhit_rows:
+            return
+        path = filedialog.asksaveasfilename(
+            title=rtl("שמור קובץ עבור רווחית"),
+            defaultextension=".xls",
+            filetypes=[("Excel 97-2003", "*.xls")],
+        )
+        if not path:
+            return
+        try:
+            export_to_rivhit_file(self.last_result, path)
+        except Exception as exc:  # noqa: BLE001
+            messagebox.showerror(rtl("שגיאה בשמירה"), rtl(f"לא הצלחתי לשמור את הקובץ:\n{exc}"))
+            return
+
+        next_id = self.last_result.next_item_number
+        self.start_id_var.set(str(next_id))
+        self.settings = Settings(
+            exchange_rate=float(self.exchange_rate_var.get()), next_item_number=next_id
+        )
+        save_settings(self.settings)
+
+        messagebox.showinfo(
+            rtl("הצלחה"),
+            rtl(
+                f"הקובץ נשמר בהצלחה:\n{path}\n\n"
+                f"מספר הפריט הבא בתור עבור ההמרה הבאה עודכן אוטומטית ל-{next_id}."
+            ),
+        )
+
+
+def main() -> None:
+    app = App()
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    main()

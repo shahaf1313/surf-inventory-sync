@@ -19,10 +19,13 @@ color), and exactly 11 columns:
   D-J (7 columns)          always blank in every observed row. Meaning
                           unknown - preserved as blank in output, matching
                           the established convention.
-  K  price                 a single numeric price per row. Which source
-                          price field this corresponds to (retail vs.
-                          wholesale/cost, and in which currency) is not
-                          yet confirmed - see docs/rivhit_format_notes.md.
+  K  price                 a single numeric price per row: the
+                          manufacturer's Suggested Retail Price (in USD or
+                          EUR, whichever the order form uses) multiplied by
+                          a manually entered exchange rate, since dad sells
+                          in ILS. Both the exchange rate and the starting
+                          item number (column A) are entered by hand for
+                          each conversion run - see gui.py's "settings" tab.
 
 One junk/note row was found in the sample (a comment embedded as a row
 instead of real product data) - parsing tolerates but flags this rather
@@ -177,18 +180,29 @@ def format_description(product: ProductRow) -> str:
 def build_rivhit_rows(
     products: list[ProductRow],
     start_id: int,
-    price_field: str = "wholesale_price",
+    exchange_rate: float,
 ) -> list[RivhitRow]:
-    """Build RivhitRow records ready to write out, assigning sequential IDs
-    starting at start_id (use next_available_id() on dad's last export to
-    compute this) and pulling the price from the given ProductRow field.
+    """Build RivhitRow records ready to write out.
+
+    - rivhit_item_number: sequential IDs starting at start_id (a manually
+      entered value, per dad's workflow - he types the next number himself
+      each time rather than us inferring it from a previous file).
+    - price: the manufacturer's Suggested Retail Price (USD/EUR, depending
+      on the order form) multiplied by exchange_rate, which is also
+      manually entered each run (the manufacturer's currency isn't fixed
+      between order forms, so this can't be hardcoded).
+      price = exchange_rate * product.retail_price
     """
-    if price_field not in ("wholesale_price", "retail_price"):
-        raise ValueError(f"Unsupported price_field: {price_field!r}")
+    if exchange_rate <= 0:
+        raise ValueError(f"exchange_rate must be positive, got {exchange_rate!r}")
 
     rows: list[RivhitRow] = []
     for offset, product in enumerate(products):
-        price = getattr(product, price_field)
+        price = (
+            round(product.retail_price * exchange_rate, 2)
+            if product.retail_price is not None
+            else None
+        )
         rows.append(
             RivhitRow(
                 rivhit_item_number=start_id + offset,

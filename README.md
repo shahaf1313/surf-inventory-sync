@@ -8,14 +8,23 @@
 
 - [x] קריאת קובץ היצרן וסינון לפי "New / Carry over" — `src/surf_inventory_sync/source_parser.py`
 - [x] הבנת פורמט רווחית ובניית קובץ תואם — `src/surf_inventory_sync/rivhit_format.py`
-      (בדיקת קצה-לקצה עוברת: קובץ יצרן אמיתי → סינון → 172 שורות רווחית תקינות)
-- [ ] שני פרטים פתוחים לפני שהממיר "אמיתי" מוכן לשימוש: מיפוי שדה המחיר,
-      ומקור מספר הפריט ההתחלתי — ראו `docs/rivhit_format_notes.md`
-- [ ] ממשק משתמש (חלון לבחירת קובץ, תצוגה מקדימה, ייצוא)
-- [ ] אריזה כקובץ הפעלה ל-Windows (PyInstaller)
+- [x] מחיר = שער המרה (קלט) × Suggested Retail Price, ומספר פריט התחלתי כקלט —
+      `src/surf_inventory_sync/conversion.py`, `config.py`
+- [x] ממשק משתמש עם 2 טאבים ("המרה" ו"הגדרות") — `src/surf_inventory_sync/gui.py`
+      (נבדק ידנית עם צילומי מסך; טקסט עברי מוצג נכון בעזרת `python-bidi`)
+- [ ] אריזה כקובץ הפעלה ל-Windows (PyInstaller) — עדיין לא בוצע, ראו הערה למטה
 - [ ] (אופציונלי, שלב ב') חיבור אוטומטי לאתר רווחית והעלאה ישירה
 
-## פיתוח
+כל הפרטים הפתוחים על פורמט רווחית (שנפתרו) מתועדים ב-`docs/rivhit_format_notes.md`.
+
+## הרצה (בזמן פיתוח, על מחשב עם Python)
+
+```bash
+python3 -m pip install -r requirements.txt
+python3 run_app.py
+```
+
+## פיתוח ובדיקות
 
 ```bash
 python3 -m pip install -r requirements.txt
@@ -23,12 +32,32 @@ python3 -m pip install pytest
 python3 -m pytest tests/
 ```
 
+## אריזה ל-Windows (.exe)
+
+עדיין לא בוצעה בפועל — הפיתוח וה-testing נעשו בסביבת לינוקס, ו-PyInstaller
+צריך לרוץ על אותה מערכת הפעלה שעבורה בונים את קובץ ה-exe. כשנגיע לשלב הזה,
+התהליך על מחשב Windows עם Python מותקן:
+
+```bash
+pip install -r requirements.txt
+pip install pyinstaller
+pyinstaller --onefile --windowed --name "SurfInventorySync" run_app.py
+```
+
+יווצר קובץ הפעלה בודד תחת `dist/SurfInventorySync.exe`.
+
 ## מבנה
 
 ```
 src/surf_inventory_sync/
   source_parser.py   # פרסור וסינון קובץ היצרן
+  rivhit_format.py    # קריאה/כתיבה של פורמט רווחית
+  conversion.py        # החיבור בין השניים (משמש גם ה-GUI וגם הבדיקות)
+  config.py             # שמירת שער ההמרה ומספר הפריט האחרון בין הרצות
+  gui.py                 # ממשק המשתמש (Tkinter)
+run_app.py                # נקודת כניסה להרצת האפליקציה
 tests/
   fixtures/           # קבצי דוגמה אמיתיים לבדיקות
-  test_source_parser.py
+docs/
+  rivhit_format_notes.md   # תיעוד פורמט רווחית וההחלטות שהתקבלו
 ```

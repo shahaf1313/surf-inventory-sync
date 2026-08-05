@@ -37,6 +37,12 @@ def test_sku_is_stable_and_unique_per_size():
     assert len(skus) == len(set(skus)), "expected one unique SKU per item+color+size row"
 
 
-def test_reading_all_sheets_without_explicit_names_does_not_crash():
-    rows = parse_manufacturer_file(FIXTURE)
-    assert len(rows) > 0
+def test_auto_sheet_selection_avoids_double_counting_the_consolidated_sheet():
+    # The fixture has a "North ALL products" sheet plus per-category sheets
+    # that repeat the same rows. Auto-selection (no explicit sheet_names)
+    # must land on the same 660 rows as reading the consolidated sheet alone,
+    # not the ~1600+ rows naively concatenating every sheet would produce.
+    explicit = parse_manufacturer_file(FIXTURE, sheet_names=["North ALL products "])
+    auto = parse_manufacturer_file(FIXTURE)
+    assert len(auto) == len(explicit) == 660
+    assert len(filter_new_items(auto)) == 172

@@ -173,6 +173,36 @@ def parse_sheet(sheet, sheet_name: str) -> list[ProductRow]:
     return rows
 
 
+def _select_default_sheets(wb) -> list[str]:
+    """Pick which sheets to read when the caller doesn't name any explicitly.
+
+    Manufacturer files we've seen bundle a single consolidated sheet (e.g.
+    "North ALL products") alongside per-category sheets (kites, apparel,
+    ...) that repeat the same rows. Reading everything naively double-counts
+    those items. If there's exactly one sheet whose name contains "all",
+    prefer it alone; otherwise fall back to every sheet with a recognizable
+    product header (parse_manufacturer_file then de-duplicates by SKU as a
+    safety net).
+    """
+    candidate_sheets = [name for name in wb.sheetnames if _find_header_row(wb[name]) is not None]
+    consolidated = [name for name in candidate_sheets if "all" in name.strip().lower()]
+    if len(consolidated) == 1:
+        return consolidated
+    return candidate_sheets
+
+
+def _dedupe_by_sku(rows: list[ProductRow]) -> list[ProductRow]:
+    """Drop later rows that share a SKU with an earlier one, preserving order."""
+    seen: set[str] = set()
+    deduped: list[ProductRow] = []
+    for row in rows:
+        if row.sku in seen:
+            continue
+        seen.add(row.sku)
+        deduped.append(row)
+    return deduped
+
+
 def parse_manufacturer_file(
     path: str | Path,
     sheet_names: list[str] | None = None,
@@ -182,9 +212,13 @@ def parse_manufacturer_file(
     Args:
         path: path to the .xlsx file.
         sheet_names: optional explicit list of sheet names to read (in that
-            order). If omitted, every sheet with a recognizable header row
-            is read. Pass e.g. ["North ALL products "] to read only the
-            consolidated sheet and avoid double-counting category sheets.
+            order); returned as-is, with no de-duplication. Pass e.g.
+            ["North ALL products "] to be explicit about reading only the
+            consolidated sheet.
+            If omitted (the normal case), sheets are auto-selected to avoid
+            double-counting: a single consolidated "...all..." sheet is
+            preferred if found, otherwise every sheet is read and results
+            are de-duplicated by SKU (item code + color + size).
     """
     # Note: intentionally NOT read_only=True. This module does random-access
     # cell lookups (sheet.cell(row, column)), which openpyxl's read_only mode
@@ -193,13 +227,14 @@ def parse_manufacturer_file(
     # normally is fast and simple.
     wb = openpyxl.load_workbook(path, data_only=True, read_only=False)
     try:
-        names = sheet_names if sheet_names is not None else wb.sheetnames
+        auto_select = sheet_names is None
+        names = sheet_names if sheet_names is not None else _select_default_sheets(wb)
         all_rows: list[ProductRow] = []
         for name in names:
             if name not in wb.sheetnames:
                 raise ValueError(f'Sheet "{name}" not found. Available: {wb.sheetnames}')
             all_rows.extend(parse_sheet(wb[name], name))
-        return all_rows
+        return _dedupe_by_sku(all_rows) if auto_select else all_rows
     finally:
         wb.close()
 

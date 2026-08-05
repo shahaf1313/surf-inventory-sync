@@ -80,9 +80,10 @@ def test_build_and_roundtrip_write_matches_dads_existing_format(tmp_path):
             source_sheet="North ALL products",
         )
     ]
-    rows = build_rivhit_rows(products, start_id=8886, price_field="wholesale_price")
+    rows = build_rivhit_rows(products, start_id=8886, exchange_rate=3.7)
     assert rows[0].rivhit_item_number == 8886
     assert format_description(products[0]) == "Reach Ultra Kite, 7m, Black, Item 85000.260014"
+    assert rows[0].price == round(2169 * 3.7, 2)  # retail_price * exchange_rate
 
     out_file = tmp_path / "out.xls"
     write_rivhit_xls(rows, out_file)
@@ -95,14 +96,42 @@ def test_build_and_roundtrip_write_matches_dads_existing_format(tmp_path):
     assert reparsed[0].color_description == "Black"
     assert reparsed[0].manufacturer_item_code == "85000.260014"
     assert reparsed[0].barcode == "8715738911000"
-    assert reparsed[0].price == 1100.6
+    assert reparsed[0].price == round(2169 * 3.7, 2)
+
+
+def test_exchange_rate_must_be_positive():
+    products = [
+        ProductRow(
+            ranking="1",
+            sub_group="North Kites",
+            segment="North Kite & Foils",
+            item_code="85000.260014",
+            barcode="8715738911000",
+            description="Reach Ultra Kite",
+            color_code="900",
+            color_description="Black",
+            size="7m",
+            status="New",
+            retail_price=2169,
+            wholesale_price=1100.6,
+            order_qty=0,
+            order_amount=0,
+            source_sheet="North ALL products",
+        )
+    ]
+    import pytest
+
+    with pytest.raises(ValueError):
+        build_rivhit_rows(products, start_id=1, exchange_rate=0)
+    with pytest.raises(ValueError):
+        build_rivhit_rows(products, start_id=1, exchange_rate=-3.7)
 
 
 def test_end_to_end_manufacturer_file_to_rivhit_rows():
     """Full pipeline: manufacturer file -> filter new items -> build Rivhit rows."""
     products = parse_manufacturer_file(MANUFACTURER_FIXTURE, sheet_names=["North ALL products "])
     new_products = filter_new_items(products)
-    rows = build_rivhit_rows(new_products, start_id=8886)
+    rows = build_rivhit_rows(new_products, start_id=8886, exchange_rate=3.7)
     assert len(rows) == 172
     assert rows[0].rivhit_item_number == 8886
     assert rows[-1].rivhit_item_number == 8886 + 172 - 1
