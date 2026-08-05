@@ -19,6 +19,7 @@ and push any real logic down into the tested modules instead).
 
 from __future__ import annotations
 
+import sys
 import tkinter as tk
 from datetime import datetime
 from pathlib import Path
@@ -32,6 +33,14 @@ from matplotlib.figure import Figure
 from .config import Settings, load_settings, save_settings
 from .conversion import ConversionResult, export_to_rivhit_file, run_conversion
 from .conversion_log import ConversionLogEntry, append_log_entry, load_log_entries
+
+
+def asset_path(filename: str) -> Path:
+    """Resolves a file under assets/, both running from source and when
+    frozen into a PyInstaller .exe (which unpacks bundled data next to
+    sys._MEIPASS rather than next to this source file)."""
+    base = Path(getattr(sys, "_MEIPASS", None) or Path(__file__).resolve().parents[2])
+    return base / "assets" / filename
 
 APP_TITLE = "עדכוני מלאי North Kiteboarding → רווחית"
 
@@ -83,11 +92,19 @@ class App(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title(rtl(APP_TITLE))
-        self.geometry("900x600")
+        self.geometry("900x640")
+
+        # Keep references on self - Tk doesn't hold its own reference to a
+        # PhotoImage, so it gets garbage-collected (and the icon vanishes)
+        # if the only reference is a local variable here.
+        self._window_icon = tk.PhotoImage(file=str(asset_path("logo.png")))
+        self.iconphoto(True, self._window_icon)
 
         self.settings = load_settings()
         self.selected_file: Path | None = None
         self.last_result: ConversionResult | None = None
+
+        self._build_header()
 
         notebook = ttk.Notebook(self)
         notebook.pack(fill="both", expand=True, padx=8, pady=8)
@@ -102,6 +119,22 @@ class App(tk.Tk):
         self._build_settings_tab()
         self._build_convert_tab()
         self._build_history_tab()
+
+    # ---------------------------------------------------------------- header
+    def _build_header(self) -> None:
+        header = ttk.Frame(self)
+        header.pack(fill="x", padx=8, pady=(8, 0))
+
+        self._header_logo = tk.PhotoImage(file=str(asset_path("logo_64.png")))
+        ttk.Label(header, image=self._header_logo).pack(side="right", padx=(0, 10))
+        ttk.Label(
+            header,
+            text=rtl(APP_TITLE),
+            font=("TkDefaultFont", 14, "bold"),
+            justify="right",
+        ).pack(side="right")
+
+        ttk.Separator(self, orient="horizontal").pack(fill="x", padx=8, pady=8)
 
     # ---------------------------------------------------------------- settings tab
     def _build_settings_tab(self) -> None:

@@ -11,6 +11,7 @@ on:
       - "src/**"
       - "run_app.py"
       - "requirements.txt"
+      - "assets/**"
       - ".github/workflows/build-windows-exe.yml"
   workflow_dispatch: {}
 
@@ -31,7 +32,10 @@ jobs:
 
       - name: Build EXE
         run: |
-          pyinstaller --onefile --windowed --name SurfInventorySync run_app.py
+          pyinstaller --onefile --windowed --name SurfInventorySync `
+            --icon assets/icon.ico `
+            --add-data "assets;assets" `
+            run_app.py
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4

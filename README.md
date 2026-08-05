@@ -18,6 +18,7 @@
 - [x] תמיכה בכמה מותגים/תבניות עם ניסוחי עמודות שונים (North Kiteboarding, Mystic)
 - [x] אריזה כקובץ הפעלה ל-Windows — בנייה אוטומטית ב-GitHub Actions על
       runner אמיתי של Windows (לא emulation), ראו למטה
+- [x] לוגו שחף (וקטורי, נוצר בקוד) — אייקון החלון, קובץ ה-exe, וכותרת באפליקציה
 - [ ] (אופציונלי, שלב ב') חיבור אוטומטי לאתר רווחית והעלאה ישירה
 
 כל הפרטים הפתוחים על פורמט רווחית (שנפתרו) מתועדים ב-`docs/rivhit_format_notes.md`.
@@ -75,6 +76,9 @@ src/surf_inventory_sync/
   conversion_log.py      # לוג CSV של כל המרה, לצורך גרף ההיסטוריה
   gui.py                 # ממשק המשתמש (Tkinter)
 run_app.py                # נקודת כניסה להרצת האפליקציה
+assets/
+  generate_logo.py         # יוצר את לוגו השחף (וקטורי, ניתן לעריכה) - python3 assets/generate_logo.py
+  logo.png, logo_64.png, icon.ico   # פלט מוכן, נטען ע"י gui.py וע"י PyInstaller
 tests/
   fixtures/           # קבצי דוגמה אמיתיים לבדיקות
 docs/
