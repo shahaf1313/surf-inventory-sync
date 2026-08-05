@@ -57,16 +57,22 @@ matplotlib.rcParams["font.family"] = [
 
 def rtl(text: str) -> str:
     """Reorder text (Hebrew, or mixed Hebrew/Latin/numbers) into visual
-    left-to-right glyph order for display in Tk widgets.
+    left-to-right glyph order for display in Tk widgets specifically.
 
     Tk draws text as a flat glyph run with no Unicode Bidirectional
     Algorithm support (confirmed via screenshot during development -
     Hebrew rendered mirrored/reversed), and this is a known limitation of
     Tk generally, not specific to the Linux box this was built on. Every
     Hebrew-containing string handed to a Tk widget must go through this.
-    If dad's actual Windows machine turns out to render correctly without
-    it, that'd be surprising - but easy to spot (text would look doubly-
-    reversed) and to remove if so.
+
+    DO NOT use this for matplotlib text (titles/axis labels in the History
+    tab). matplotlib's text renderer already applies correct Unicode bidi
+    reordering on its own - confirmed by rendering the same string via
+    matplotlib and via a browser (bidi-correct by construction) and
+    comparing glyph order pixel-by-pixel with a ruler overlay. Wrapping
+    matplotlib text in rtl() double-reverses it into mirrored, unreadable
+    output - this exact bug shipped once and was caught by the user
+    reporting "לאורך" rendering as "ךרואל" in the History graph title.
     """
     # Reorder each line independently - running the algorithm across an
     # embedded newline can bleed direction across lines incorrectly.
@@ -230,9 +236,15 @@ class App(tk.Tk):
         dates = [e.timestamp for e in entries]
         rates = [e.exchange_rate for e in entries]
         self.history_ax.plot(dates, rates, marker="o", linestyle="-", color="#1f6feb")
-        self.history_ax.set_title(rtl("שער המרה לאורך זמן"))
-        self.history_ax.set_xlabel(rtl("תאריך"))
-        self.history_ax.set_ylabel(rtl("שער המרה"))
+        # NOT wrapped in rtl() - unlike Tk, matplotlib's text renderer applies
+        # its own correct Unicode bidi reordering. Confirmed by comparing
+        # rendered glyph order pixel-by-pixel against a browser (also
+        # bidi-correct): raw text matched the browser; rtl()-wrapped text
+        # came out mirrored (double-reversed). Passing already-reordered
+        # text here would break it again.
+        self.history_ax.set_title("שער המרה לאורך זמן")
+        self.history_ax.set_xlabel("תאריך")
+        self.history_ax.set_ylabel("שער המרה")
         self.history_ax.grid(True, alpha=0.3)
         self.figure.autofmt_xdate()
         self.figure.tight_layout()
