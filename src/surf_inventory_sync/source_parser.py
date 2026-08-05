@@ -42,8 +42,11 @@ _HEADER_ALIASES: dict[str, str] = {
     "size": "size",
     "new / carry over": "status",
     "new/carry over": "status",
+    "status": "status",  # seen on Mystic order forms (North's is "New / Carry over")
     "suggested retail price": "retail_price",
+    "suggested retail price (ex vat)": "retail_price",  # seen on Mystic USD order forms
     "usdex price": "wholesale_price",
+    "standard sales price": "wholesale_price",  # Mystic's name for the same kind of field
     "order": "order_qty",
     "order amount": "order_amount",
 }
@@ -80,11 +83,13 @@ class ProductRow:
     def is_new_or_new_size(self) -> bool:
         """True for rows marked as a new item or a newly added size.
 
-        The manufacturer's "New / Carry over" column is free text and not
-        consistently cased or spaced across seasons (seen: "New", "NEW",
-        "New sizes", "Carry Over ", "Carry over "). We treat any value
-        containing the word "new" (case-insensitive) as new; anything else
-        (including blank) is treated as carry-over and excluded.
+        The manufacturer's "New / Carry over" (or "Status", depending on the
+        order form) column is free text and not consistently cased or
+        spaced across seasons/brands (seen: "New", "NEW", "New sizes",
+        "New colour", "New Colour", "Carry Over ", "Carry over "). We treat
+        any value containing the word "new" (case-insensitive) as new;
+        anything else (including blank) is treated as carry-over and
+        excluded.
         """
         if not self.status:
             return False
