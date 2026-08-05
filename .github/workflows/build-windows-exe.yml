@@ -33,6 +33,7 @@ jobs:
       - name: Build EXE
         run: |
           pyinstaller --onefile --windowed --name SurfInventorySync `
+            --paths src `
             --icon assets/icon.ico `
             --add-data "assets;assets" `
             run_app.py

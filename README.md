@@ -60,7 +60,7 @@ GitHub Release), תגיד לי.
 ```bash
 pip install -r requirements.txt
 pip install pyinstaller
-pyinstaller --onefile --windowed --name "SurfInventorySync" run_app.py
+pyinstaller --onefile --windowed --name "SurfInventorySync" --paths src --icon assets\icon.ico --add-data "assets;assets" run_app.py
 ```
 
 יווצר קובץ הפעלה בודד תחת `dist/SurfInventorySync.exe`.
