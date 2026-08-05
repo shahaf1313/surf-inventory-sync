@@ -20,7 +20,7 @@ def test_run_conversion_end_to_end():
     assert len(result.new_products) == 172
     assert len(result.rivhit_rows) == 172
     assert result.rivhit_rows[0].rivhit_item_number == 8886
-    assert result.rivhit_rows[0].price == round(result.new_products[0].retail_price * 3.7, 2)
+    assert result.rivhit_rows[0].price == round(result.new_products[0].retail_price * 3.7)
     # every fixture product has a retail price, so nothing should be flagged
     assert result.missing_retail_price == []
 

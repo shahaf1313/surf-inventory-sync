@@ -2,3 +2,4 @@ openpyxl>=3.1
 xlrd>=2.0      # reading dad's existing legacy .xls Rivhit files
 xlwt>=1.3      # writing new legacy .xls files in that same format
 python-bidi>=0.6   # correct Hebrew rendering in the Tkinter GUI (see gui.py's rtl())
+matplotlib>=3.7    # the "History" tab's exchange-rate-over-time graph

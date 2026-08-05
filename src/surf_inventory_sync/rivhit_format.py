@@ -23,9 +23,10 @@ color), and exactly 11 columns:
                           manufacturer's Suggested Retail Price (in USD or
                           EUR, whichever the order form uses) multiplied by
                           a manually entered exchange rate, since dad sells
-                          in ILS. Both the exchange rate and the starting
-                          item number (column A) are entered by hand for
-                          each conversion run - see gui.py's "settings" tab.
+                          in ILS. Rounded to whole shekels (no agorot).
+                          Both the exchange rate and the starting item
+                          number (column A) are entered by hand for each
+                          conversion run - see gui.py's "settings" tab.
 
 One junk/note row was found in the sample (a comment embedded as a row
 instead of real product data) - parsing tolerates but flags this rather
@@ -190,8 +191,9 @@ def build_rivhit_rows(
     - price: the manufacturer's Suggested Retail Price (USD/EUR, depending
       on the order form) multiplied by exchange_rate, which is also
       manually entered each run (the manufacturer's currency isn't fixed
-      between order forms, so this can't be hardcoded).
-      price = exchange_rate * product.retail_price
+      between order forms, so this can't be hardcoded). Rounded to whole
+      shekels, per dad's price list convention (no agorot).
+      price = round(exchange_rate * product.retail_price)
     """
     if exchange_rate <= 0:
         raise ValueError(f"exchange_rate must be positive, got {exchange_rate!r}")
@@ -199,7 +201,7 @@ def build_rivhit_rows(
     rows: list[RivhitRow] = []
     for offset, product in enumerate(products):
         price = (
-            round(product.retail_price * exchange_rate, 2)
+            round(product.retail_price * exchange_rate)
             if product.retail_price is not None
             else None
         )

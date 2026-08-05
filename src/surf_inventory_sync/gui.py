@@ -1,5 +1,5 @@
 """Desktop UI (Tkinter - ships with standard Python on Windows, no extra
-install needed). Two tabs:
+install needed). Three tabs:
 
   - "המרה" (Convert): pick the manufacturer file, preview what will be
     exported, and save the Rivhit file.
@@ -7,6 +7,9 @@ install needed). Two tabs:
     both entered by hand each run per the user's workflow. Values are
     pre-filled from the last run as a convenience default, but always
     editable.
+  - "היסטוריה" (History): every past export logged (date/time, source
+    file, exchange rate, starting item number), plotted as exchange rate
+    over time.
 
 Business logic lives in conversion.py/rivhit_format.py/source_parser.py and
 is unit-tested there; this module is a thin, mostly-untested UI layer over
@@ -17,13 +20,17 @@ and push any real logic down into the tested modules instead).
 from __future__ import annotations
 
 import tkinter as tk
+from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
 from bidi.algorithm import get_display
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 
 from .config import Settings, load_settings, save_settings
 from .conversion import ConversionResult, export_to_rivhit_file, run_conversion
+from .conversion_log import ConversionLogEntry, append_log_entry, load_log_entries
 
 APP_TITLE = "עדכוני מלאי North Kiteboarding → רווחית"
 
@@ -61,11 +68,14 @@ class App(tk.Tk):
 
         self.convert_tab = ttk.Frame(notebook)
         self.settings_tab = ttk.Frame(notebook)
+        self.history_tab = ttk.Frame(notebook)
         notebook.add(self.convert_tab, text=rtl("המרה"))
         notebook.add(self.settings_tab, text=rtl("הגדרות"))
+        notebook.add(self.history_tab, text=rtl("היסטוריה"))
 
         self._build_settings_tab()
         self._build_convert_tab()
+        self._build_history_tab()
 
     # ---------------------------------------------------------------- settings tab
     def _build_settings_tab(self) -> None:
@@ -169,6 +179,45 @@ class App(tk.Tk):
         )
         self.export_button.pack(padx=10, pady=(0, 10), anchor="e")
 
+    # ---------------------------------------------------------------- history tab
+    def _build_history_tab(self) -> None:
+        frame = self.history_tab
+
+        self.figure = Figure(figsize=(7, 4.5), dpi=100)
+        self.history_ax = self.figure.add_subplot(111)
+        self.history_canvas = FigureCanvasTkAgg(self.figure, master=frame)
+        self.history_canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
+
+        self.no_history_label = ttk.Label(
+            frame, text=rtl("עדיין אין היסטוריית המרות - הגרף יופיע אחרי ההמרה הראשונה"), justify="right"
+        )
+
+        self._refresh_history_tab()
+
+    def _refresh_history_tab(self) -> None:
+        entries = load_log_entries()
+        self.history_ax.clear()
+
+        if not entries:
+            self.history_canvas.get_tk_widget().pack_forget()
+            self.no_history_label.pack(padx=10, pady=10, anchor="e")
+            self.history_canvas.draw()
+            return
+
+        self.no_history_label.pack_forget()
+        self.history_canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
+
+        dates = [e.timestamp for e in entries]
+        rates = [e.exchange_rate for e in entries]
+        self.history_ax.plot(dates, rates, marker="o", linestyle="-", color="#1f6feb")
+        self.history_ax.set_title(rtl("שער המרה לאורך זמן"))
+        self.history_ax.set_xlabel(rtl("תאריך"))
+        self.history_ax.set_ylabel(rtl("שער המרה"))
+        self.history_ax.grid(True, alpha=0.3)
+        self.figure.autofmt_xdate()
+        self.figure.tight_layout()
+        self.history_canvas.draw()
+
     def _on_pick_file(self) -> None:
         path = filedialog.askopenfilename(
             title=rtl("בחר את קובץ ההזמנה מהיצרן"),
@@ -209,7 +258,7 @@ class App(tk.Tk):
                 "end",
                 values=(
                     row.rivhit_item_number,
-                    "" if row.price is None else f"{row.price:,.2f}",
+                    "" if row.price is None else f"{row.price:,.0f}",
                     row.size,
                     row.color_description,
                     row.description,
@@ -257,6 +306,17 @@ class App(tk.Tk):
             exchange_rate=float(self.exchange_rate_var.get()), next_item_number=next_id
         )
         save_settings(self.settings)
+
+        append_log_entry(
+            ConversionLogEntry(
+                timestamp=datetime.now(),
+                source_file=self.selected_file.name if self.selected_file else "",
+                exchange_rate=self.settings.exchange_rate,
+                start_item_number=self.last_result.rivhit_rows[0].rivhit_item_number,
+                item_count=len(self.last_result.rivhit_rows),
+            )
+        )
+        self._refresh_history_tab()
 
         messagebox.showinfo(
             rtl("הצלחה"),
