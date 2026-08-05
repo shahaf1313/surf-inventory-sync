@@ -24,6 +24,7 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
+import matplotlib
 from bidi.algorithm import get_display
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
@@ -33,6 +34,25 @@ from .conversion import ConversionResult, export_to_rivhit_file, run_conversion
 from .conversion_log import ConversionLogEntry, append_log_entry, load_log_entries
 
 APP_TITLE = "עדכוני מלאי North Kiteboarding → רווחית"
+
+# matplotlib's default font (DejaVu Sans) technically *has* glyphs for Hebrew
+# final-form letters (ך ם ן ף ץ) but draws them so minimally they're easy to
+# misread as a stray mark rather than a letter - confirmed by rendering the
+# History tab's title and comparing it, zoomed in, against a browser (which
+# has correct Hebrew typography) rendering the same string. Listing known-good
+# Hebrew fonts first fixes it; matplotlib falls back per-glyph down the list,
+# so digits/Latin text still resolve via DejaVu Sans (always bundled, so this
+# never fully breaks even if none of the named fonts are installed). Arial/
+# Tahoma/Segoe UI ship with Windows - the actual target machine - and render
+# Hebrew correctly; the rest are best-effort for other platforms.
+matplotlib.rcParams["font.family"] = [
+    "Arial",
+    "Tahoma",
+    "Segoe UI",
+    "David",
+    "Noto Sans Hebrew",
+    "DejaVu Sans",
+]
 
 
 def rtl(text: str) -> str:
