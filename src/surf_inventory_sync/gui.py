@@ -1,12 +1,15 @@
 """Desktop UI (Tkinter - ships with standard Python on Windows, no extra
-install needed). Two tabs:
+install needed). Single-screen layout (no tabs - originally split into
+"המרה"/"הגדרות" tabs, merged per user request since the settings tab was
+too sparse on its own):
 
-  - "המרה" (Convert): pick the manufacturer file, preview what will be
-    exported, and save the Rivhit file.
-  - "הגדרות" (Settings): the exchange rate and the starting item number,
-    both entered by hand each run per the user's workflow. Values are
-    pre-filled from the last run as a convenience default, but always
-    editable.
+  - Settings row (exchange rate, starting item number) at the top. Both
+    entered by hand each run per the user's workflow, pre-filled from the
+    last value used. Any edit auto-saves as the new default on focus-out/
+    Enter, independent of running or exporting a conversion - so the next
+    time the app opens, the fields show whatever was last typed, not just
+    whatever was last exported.
+  - Below that, the manufacturer-file picker, preview, and export button.
 
 Every successful export is still logged (date/time, source file, exchange
 rate, starting item number) via conversion_log.py, even though there's no
@@ -82,17 +85,8 @@ class App(tk.Tk):
         self.last_result: ConversionResult | None = None
 
         self._build_header()
-
-        notebook = ttk.Notebook(self)
-        notebook.pack(fill="both", expand=True, padx=8, pady=8)
-
-        self.convert_tab = ttk.Frame(notebook)
-        self.settings_tab = ttk.Frame(notebook)
-        notebook.add(self.convert_tab, text=rtl("המרה"))
-        notebook.add(self.settings_tab, text=rtl("הגדרות"))
-
-        self._build_settings_tab()
-        self._build_convert_tab()
+        self._build_settings_row()
+        self._build_convert_section()
 
     # ---------------------------------------------------------------- header
     def _build_header(self) -> None:
@@ -110,38 +104,40 @@ class App(tk.Tk):
 
         ttk.Separator(self, orient="horizontal").pack(fill="x", padx=8, pady=8)
 
-    # ---------------------------------------------------------------- settings tab
-    def _build_settings_tab(self) -> None:
-        frame = self.settings_tab
-        pad = {"padx": 10, "pady": 8}
+    # ---------------------------------------------------------------- settings row
+    def _build_settings_row(self) -> None:
+        row = ttk.Frame(self)
+        row.pack(fill="x", padx=10, pady=(10, 0))
 
-        ttk.Label(
-            frame,
-            text=rtl("שער המרה (מחיר לצרכן בקובץ היצרן X שער המרה = מחיר לצרכן ברווחית)"),
-            justify="right",
-        ).grid(row=0, column=1, sticky="e", **pad)
+        # Packed right-to-left, so exchange rate (logically "first") ends up
+        # rightmost - matching Hebrew reading order.
+        ttk.Label(row, text=rtl("שער המרה:"), justify="right").pack(side="right")
         self.exchange_rate_var = tk.StringVar(value=str(self.settings.exchange_rate))
-        ttk.Entry(frame, textvariable=self.exchange_rate_var, width=15, justify="right").grid(
-            row=0, column=0, sticky="w", **pad
+        exchange_rate_entry = ttk.Entry(
+            row, textvariable=self.exchange_rate_var, width=10, justify="right"
         )
+        exchange_rate_entry.pack(side="right", padx=(20, 6))
 
-        ttk.Label(frame, text=rtl("מספר פריט התחלתי ברווחית"), justify="right").grid(
-            row=1, column=1, sticky="e", **pad
-        )
+        ttk.Label(row, text=rtl("מספר פריט התחלתי ברווחית:"), justify="right").pack(side="right")
         self.start_id_var = tk.StringVar(value=str(self.settings.next_item_number))
-        ttk.Entry(frame, textvariable=self.start_id_var, width=15, justify="right").grid(
-            row=1, column=0, sticky="w", **pad
-        )
+        start_id_entry = ttk.Entry(row, textvariable=self.start_id_var, width=10, justify="right")
+        start_id_entry.pack(side="right", padx=(0, 6))
+
+        for entry in (exchange_rate_entry, start_id_entry):
+            entry.bind("<FocusOut>", self._autosave_settings)
+            entry.bind("<Return>", self._autosave_settings)
 
         ttk.Label(
-            frame,
+            self,
             text=rtl(
-                "שני השדות ניתנים לעריכה בכל המרה. הערכים כאן הם רק ברירת מחדל\n"
-                "(מתעדכנים אוטומטית אחרי ייצוא מוצלח, לפי המספר הבא בתור)."
+                "שער המרה: מחיר לצרכן בקובץ היצרן × שער המרה = מחיר לצרכן ברווחית. "
+                "שני השדות נשמרים אוטומטית בכל שינוי - בפתיחה הבאה של האפליקציה יופיעו הערכים האחרונים."
             ),
             justify="right",
             foreground="#666",
-        ).grid(row=2, column=0, columnspan=2, sticky="e", padx=10, pady=(20, 0))
+        ).pack(fill="x", padx=10, pady=(2, 0), anchor="e")
+
+        ttk.Separator(self, orient="horizontal").pack(fill="x", padx=8, pady=8)
 
     def _read_settings_from_ui(self) -> tuple[float, int]:
         """Parse and validate the settings fields; raises ValueError with a
@@ -162,9 +158,25 @@ class App(tk.Tk):
 
         return exchange_rate, start_id
 
-    # ---------------------------------------------------------------- convert tab
-    def _build_convert_tab(self) -> None:
-        frame = self.convert_tab
+    def _autosave_settings(self, _event=None) -> None:
+        """Persists the settings fields as the new default as soon as they
+        change (on focus-out / Enter), independent of running or exporting a
+        conversion. Silently does nothing if a field is mid-edit and not
+        currently a valid value (e.g. empty, or just "3.") - no error popup
+        here, since this fires passively while typing/tabbing through the
+        form, not on an explicit submit action. Real validation with an
+        error message happens in _read_settings_from_ui(), used when the
+        user explicitly clicks "הרץ המרה"."""
+        try:
+            exchange_rate, start_id = self._read_settings_from_ui()
+        except ValueError:
+            return
+        self.settings = Settings(exchange_rate=exchange_rate, next_item_number=start_id)
+        save_settings(self.settings)
+
+    # ---------------------------------------------------------------- convert section
+    def _build_convert_section(self) -> None:
+        frame = self
 
         top = ttk.Frame(frame)
         top.pack(fill="x", padx=10, pady=10)
