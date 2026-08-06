@@ -42,7 +42,7 @@ def asset_path(filename: str) -> Path:
     base = Path(getattr(sys, "_MEIPASS", None) or Path(__file__).resolve().parents[2])
     return base / "assets" / filename
 
-APP_TITLE = "עדכוני מלאי North Kiteboarding → רווחית"
+APP_TITLE = "פריטי מלאי חדשים לרווחית"
 
 # matplotlib's default font (DejaVu Sans) technically *has* glyphs for Hebrew
 # final-form letters (ך ם ן ף ץ) but draws them so minimally they're easy to
@@ -85,8 +85,8 @@ def rtl(text: str) -> str:
     """
     # Reorder each line independently - running the algorithm across an
     # embedded newline can bleed direction across lines incorrectly.
-    return "\n".join(get_display(line) for line in text.split("\n"))
-
+    # return "\n".join(get_display(line) for line in text.split("\n"))
+    return text
 
 class App(tk.Tk):
     def __init__(self) -> None:
@@ -143,7 +143,7 @@ class App(tk.Tk):
 
         ttk.Label(
             frame,
-            text=rtl("שער המרה (מחיר רווחית = שער × Suggested Retail Price מקובץ היצרן)"),
+            text=rtl("שער המרה (מחיר לצרכן בקובץ היצרן X שער המרה = מחיר לצרכן ברווחית)"),
             justify="right",
         ).grid(row=0, column=1, sticky="e", **pad)
         self.exchange_rate_var = tk.StringVar(value=str(self.settings.exchange_rate))

@@ -20,7 +20,7 @@ def _default_config_path() -> Path:
 
 @dataclass
 class Settings:
-    exchange_rate: float = 3.7
+    exchange_rate: float = 4.1
     next_item_number: int = 1
 
 
