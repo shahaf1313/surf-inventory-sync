@@ -46,14 +46,13 @@ python3 -m pytest tests/
 
 **איך מורידים את קובץ ה-exe המוכן:**
 
-1. בריפו ב-GitHub, לשונית **Actions**.
-2. לבחור בהרצה האחרונה של "Build Windows EXE" (רץ אוטומטית אחרי כל שינוי
-   בקוד; אפשר גם להריץ ידנית דרך "Run workflow").
-3. לגלול למטה ל-**Artifacts**, ולהוריד את `SurfInventorySync-windows` —
-   קובץ zip שבתוכו `SurfInventorySync.exe`.
+קישור קבוע (לא משתנה בין גרסאות, נוח גם בנייד):
+**https://github.com/shahaf1313/surf-inventory-sync/releases/latest**
+— לוחצים על `SurfInventorySync.exe` ברשימת ה-Assets.
 
-הקובץ שמור שם 90 יום מכל הרצה. אם תרצה קישור קבוע במקום זה (למשל
-GitHub Release), תגיד לי.
+כל בנייה מוצלחת מעדכנת אוטומטית את הגרסה תחת הקישור הזה, אז אפשר לשמור
+אותו כבוקמרק. (יש גם עותק תחת לשונית Actions → הרצה → Artifacts, אבל זה
+דורש כניסה מאומתת ל-GitHub וניווט נוסף — פחות נוח בנייד.)
 
 **לבנות ידנית** (אם יש בכל זאת גישה למחשב Windows עם Python):
 

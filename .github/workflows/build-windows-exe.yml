@@ -15,6 +15,9 @@ on:
       - ".github/workflows/build-windows-exe.yml"
   workflow_dispatch: {}
 
+permissions:
+  contents: write  # needed to publish/update the "latest" release below
+
 jobs:
   build:
     runs-on: windows-latest
@@ -44,3 +47,21 @@ jobs:
           name: SurfInventorySync-windows
           path: dist/SurfInventorySync.exe
           retention-days: 90
+
+      # A stable, single-click download link (unlike Actions artifacts,
+      # which need a GitHub-authenticated session and a few taps through the
+      # Actions UI just to get a .zip - awkward enough on mobile that it
+      # didn't work at all for the user). This updates the same "latest"
+      # release/tag every successful build, so the link never changes.
+      - name: Publish "latest" release with the exe attached
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: latest
+          name: "גרסה אחרונה (Latest build)"
+          body: |
+            נבנה אוטומטית מ-commit ${{ github.sha }}.
+            הורדה: SurfInventorySync.exe למטה.
+          make_latest: true
+          files: dist/SurfInventorySync.exe
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
