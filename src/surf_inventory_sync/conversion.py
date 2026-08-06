@@ -1,14 +1,14 @@
 """Orchestrates a full conversion run: manufacturer file -> filtered new
-items -> Rivhit rows -> written .xls file. Kept separate from the GUI so it
-can be unit-tested without a display, and reused from a future CLI/auto-
-upload path."""
+items -> Rivhit rows -> written tab-delimited text file. Kept separate from
+the GUI so it can be unit-tested without a display, and reused from a
+future CLI/auto-upload path."""
 
 from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
 
-from .rivhit_format import RivhitRow, build_rivhit_rows, write_rivhit_xls
+from .rivhit_format import RivhitRow, build_rivhit_rows, write_rivhit_txt
 from .source_parser import ProductRow, filter_new_items, parse_manufacturer_file
 
 
@@ -46,4 +46,4 @@ def run_conversion(
 
 
 def export_to_rivhit_file(result: ConversionResult, output_path: str | Path) -> None:
-    write_rivhit_xls(result.rivhit_rows, output_path)
+    write_rivhit_txt(result.rivhit_rows, output_path)

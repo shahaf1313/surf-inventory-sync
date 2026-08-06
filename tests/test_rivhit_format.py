@@ -9,6 +9,7 @@ from surf_inventory_sync.rivhit_format import (  # noqa: E402
     format_description,
     next_available_id,
     parse_rivhit_new_items_file,
+    write_rivhit_txt,
     write_rivhit_xls,
 )
 from surf_inventory_sync.source_parser import (  # noqa: E402
@@ -139,3 +140,53 @@ def test_end_to_end_manufacturer_file_to_rivhit_rows():
     # round-tripped through the parser (catches subtle formatting mismatches).
     for row in rows:
         assert row.description  # non-empty
+
+
+def test_write_rivhit_txt_produces_tab_delimited_rows_matching_xls_layout(tmp_path):
+    products = [
+        ProductRow(
+            ranking="1",
+            sub_group="North Kites",
+            segment="North Kite & Foils",
+            item_code="85000.260014",
+            barcode="8715738911000",
+            description="Reach Ultra Kite",
+            color_code="900",
+            color_description="Black",
+            size="7m",
+            status="New",
+            retail_price=2169,
+            wholesale_price=1100.6,
+            order_qty=0,
+            order_amount=0,
+            source_sheet="North ALL products",
+        )
+    ]
+    rows = build_rivhit_rows(products, start_id=8886, exchange_rate=3.7)
+
+    out_file = tmp_path / "out.txt"
+    write_rivhit_txt(rows, out_file)
+
+    # newline="" so \r\n survives untouched for the check below - Path.read_text()
+    # (and open() without newline="") does universal-newline translation on
+    # read, silently collapsing \r\n to \n and defeating this exact assertion.
+    with open(out_file, encoding="utf-8-sig", newline="") as f:
+        content = f.read()
+    assert content.endswith("\r\n")
+    lines = content.splitlines()
+    assert len(lines) == 1
+
+    fields = lines[0].split("\t")
+    assert len(fields) == 11  # A..K, same 11 columns as the .xls layout
+    assert fields[0] == "8886"  # A: running id, no decimal point
+    assert fields[1] == "Reach Ultra Kite, 7m, Black, Item 85000.260014"  # B: description
+    assert fields[2] == "8715738911000"  # C: barcode
+    assert fields[3:10] == [""] * 7  # D-J: always blank
+    assert fields[10] == str(round(2169 * 3.7))  # K: price, whole number
+
+
+def test_write_rivhit_txt_handles_no_rows(tmp_path):
+    out_file = tmp_path / "empty.txt"
+    write_rivhit_txt([], out_file)
+    with open(out_file, encoding="utf-8-sig", newline="") as f:
+        assert f.read() == ""

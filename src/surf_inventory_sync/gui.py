@@ -42,6 +42,7 @@ def asset_path(filename: str) -> Path:
     base = Path(getattr(sys, "_MEIPASS", None) or Path(__file__).resolve().parents[2])
     return base / "assets" / filename
 
+
 APP_TITLE = "פריטי מלאי חדשים לרווחית"
 
 # matplotlib's default font (DejaVu Sans) technically *has* glyphs for Hebrew
@@ -68,25 +69,31 @@ def rtl(text: str) -> str:
     """Reorder text (Hebrew, or mixed Hebrew/Latin/numbers) into visual
     left-to-right glyph order for display in Tk widgets specifically.
 
-    Tk draws text as a flat glyph run with no Unicode Bidirectional
-    Algorithm support (confirmed via screenshot during development -
-    Hebrew rendered mirrored/reversed), and this is a known limitation of
-    Tk generally, not specific to the Linux box this was built on. Every
-    Hebrew-containing string handed to a Tk widget must go through this.
+    This is needed on Linux, where Tk draws text as a flat glyph run with
+    no Unicode Bidirectional Algorithm support (confirmed via screenshot
+    during development - Hebrew rendered mirrored/reversed). It is NOT
+    needed on Windows - confirmed via real testing on the target machine:
+    Windows' Tk renders Hebrew correctly on its own (likely via GDI/
+    Uniscribe doing bidi shaping under the hood), so applying this on top
+    there double-reverses it back into mirrored text. Hence the platform
+    check below, rather than always applying or always skipping it.
 
     DO NOT use this for matplotlib text (titles/axis labels in the History
-    tab). matplotlib's text renderer already applies correct Unicode bidi
-    reordering on its own - confirmed by rendering the same string via
-    matplotlib and via a browser (bidi-correct by construction) and
-    comparing glyph order pixel-by-pixel with a ruler overlay. Wrapping
-    matplotlib text in rtl() double-reverses it into mirrored, unreadable
-    output - this exact bug shipped once and was caught by the user
-    reporting "לאורך" rendering as "ךרואל" in the History graph title.
+    tab), on any platform. matplotlib's text renderer already applies
+    correct Unicode bidi reordering on its own - confirmed by rendering
+    the same string via matplotlib and via a browser (bidi-correct by
+    construction) and comparing glyph order pixel-by-pixel with a ruler
+    overlay. Wrapping matplotlib text in rtl() double-reverses it into
+    mirrored, unreadable output - this exact bug shipped once and was
+    caught by the user reporting "לאורך" rendering as "ךרואל" in the
+    History graph title.
     """
+    if sys.platform.startswith("win"):
+        return text
     # Reorder each line independently - running the algorithm across an
     # embedded newline can bleed direction across lines incorrectly.
-    # return "\n".join(get_display(line) for line in text.split("\n"))
-    return text
+    return "\n".join(get_display(line) for line in text.split("\n"))
+
 
 class App(tk.Tk):
     def __init__(self) -> None:
@@ -354,8 +361,8 @@ class App(tk.Tk):
             return
         path = filedialog.asksaveasfilename(
             title=rtl("שמור קובץ עבור רווחית"),
-            defaultextension=".xls",
-            filetypes=[("Excel 97-2003", "*.xls")],
+            defaultextension=".txt",
+            filetypes=[("Text (Tab delimited)", "*.txt")],
         )
         if not path:
             return

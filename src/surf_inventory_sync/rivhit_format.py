@@ -2,8 +2,12 @@
 The Rivhit "new items" import format, reverse-engineered from a real file
 dad has been maintaining by hand (tests/fixtures/sample_rivhit_new_items_ss24.xls).
 
-It's a legacy .xls file with NO header row, one row per SKU (item + size +
-color), and exactly 11 columns:
+That reference file is a legacy .xls with NO header row, one row per SKU
+(item + size + color), and exactly 11 columns. This module can both read
+that .xls layout (parse_rivhit_new_items_file/write_rivhit_xls, kept for
+validating against dad's historical files) and write the same 11 columns
+out as tab-delimited text instead (write_rivhit_txt) - the app's actual
+export format, per dad's preference over the binary .xls. Column layout:
 
   A  rivhit_item_number  running integer, strictly sequential with zero
                           gaps across the whole multi-season file (observed
@@ -237,3 +241,43 @@ def write_rivhit_xls(rows: list[RivhitRow], path: str | Path) -> None:
             sheet.write(row_idx, col, "")
         sheet.write(row_idx, 10, row.price if row.price is not None else 0)
     wb.save(str(path))
+
+
+def _format_number(value: float | int | None) -> str:
+    """Whole numbers print without a trailing '.0' (item numbers and
+    prices are always whole in practice, but this stays correct if a
+    non-whole price ever shows up)."""
+    if value is None:
+        return ""
+    return str(int(value)) if float(value).is_integer() else str(value)
+
+
+def write_rivhit_txt(rows: list[RivhitRow], path: str | Path) -> None:
+    """Write rows out as tab-delimited text, in the same 11-column layout
+    as write_rivhit_xls(): A=running id, B=description, C=barcode,
+    D-J=blank, K=price - just as plain text instead of a binary .xls.
+
+    utf-8-sig (UTF-8 with a BOM) so Windows text tools/imports that sniff
+    the BOM to detect encoding read it correctly; \\r\\n line endings to
+    match native Windows text file conventions.
+
+    Opened with newline="" (as Python's own csv module docs recommend):
+    without it, text-mode writing translates every '\\n' it finds to
+    os.linesep - on Windows that's '\\r\\n', which would double up the
+    '\\r\\n' already in the string into '\\r\\r\\n'. newline="" disables
+    that translation so the line endings written are exactly the ones
+    built below, unchanged by platform.
+    """
+    lines = []
+    for row in rows:
+        fields = [
+            _format_number(row.rivhit_item_number),
+            row.raw_description,
+            row.barcode or "",
+            *("" for _ in _BLANK_COLUMNS),
+            _format_number(row.price),
+        ]
+        lines.append("\t".join(fields))
+    content = "\r\n".join(lines) + "\r\n" if lines else ""
+    with open(path, "w", encoding="utf-8-sig", newline="") as f:
+        f.write(content)
