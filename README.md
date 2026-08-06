@@ -10,10 +10,10 @@
 - [x] הבנת פורמט רווחית ובניית קובץ תואם — `src/surf_inventory_sync/rivhit_format.py`
 - [x] מחיר = שער המרה (קלט) × Suggested Retail Price, ומספר פריט התחלתי כקלט —
       `src/surf_inventory_sync/conversion.py`, `config.py`
-- [x] ממשק משתמש עם 3 טאבים ("המרה", "הגדרות", "היסטוריה") — `src/surf_inventory_sync/gui.py`
+- [x] ממשק משתמש עם 2 טאבים ("המרה", "הגדרות") — `src/surf_inventory_sync/gui.py`
       (נבדק ידנית עם צילומי מסך; טקסט עברי מוצג נכון בעזרת `python-bidi`)
-- [x] לוג של כל המרה (תאריך/שעה, קובץ מקור, שער המרה, מספר פריט התחלתי) +
-      גרף שער המרה לאורך זמן בטאב "היסטוריה" — `src/surf_inventory_sync/conversion_log.py`
+- [x] לוג של כל המרה (תאריך/שעה, קובץ מקור, שער המרה, מספר פריט התחלתי) —
+      `src/surf_inventory_sync/conversion_log.py` (בלי תצוגה בממשק כרגע)
 - [x] מחיר מעוגל לשקלים שלמים
 - [x] תמיכה בכמה מותגים/תבניות עם ניסוחי עמודות שונים (North Kiteboarding, Mystic)
 - [x] אריזה כקובץ הפעלה ל-Windows — בנייה אוטומטית ב-GitHub Actions על
@@ -73,7 +73,7 @@ src/surf_inventory_sync/
   rivhit_format.py    # קריאה/כתיבה של פורמט רווחית
   conversion.py        # החיבור בין השניים (משמש גם ה-GUI וגם הבדיקות)
   config.py             # שמירת שער ההמרה ומספר הפריט האחרון בין הרצות
-  conversion_log.py      # לוג CSV של כל המרה, לצורך גרף ההיסטוריה
+  conversion_log.py      # לוג CSV של כל המרה (תאריך, קובץ, שער המרה, מספר פריט)
   gui.py                 # ממשק המשתמש (Tkinter)
 run_app.py                # נקודת כניסה להרצת האפליקציה
 assets/

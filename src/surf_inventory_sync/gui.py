@@ -1,5 +1,5 @@
 """Desktop UI (Tkinter - ships with standard Python on Windows, no extra
-install needed). Three tabs:
+install needed). Two tabs:
 
   - "המרה" (Convert): pick the manufacturer file, preview what will be
     exported, and save the Rivhit file.
@@ -7,9 +7,11 @@ install needed). Three tabs:
     both entered by hand each run per the user's workflow. Values are
     pre-filled from the last run as a convenience default, but always
     editable.
-  - "היסטוריה" (History): every past export logged (date/time, source
-    file, exchange rate, starting item number), plotted as exchange rate
-    over time.
+
+Every successful export is still logged (date/time, source file, exchange
+rate, starting item number) via conversion_log.py, even though there's no
+"History" tab showing it anymore (removed per user request) - the log
+itself stays, in case a UI for it is wanted again later.
 
 Business logic lives in conversion.py/rivhit_format.py/source_parser.py and
 is unit-tested there; this module is a thin, mostly-untested UI layer over
@@ -25,14 +27,11 @@ from datetime import datetime
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
 
-import matplotlib
 from bidi.algorithm import get_display
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
 
 from .config import Settings, load_settings, save_settings
 from .conversion import ConversionResult, export_to_rivhit_file, run_conversion
-from .conversion_log import ConversionLogEntry, append_log_entry, load_log_entries
+from .conversion_log import ConversionLogEntry, append_log_entry
 
 
 def asset_path(filename: str) -> Path:
@@ -44,25 +43,6 @@ def asset_path(filename: str) -> Path:
 
 
 APP_TITLE = "פריטי מלאי חדשים לרווחית"
-
-# matplotlib's default font (DejaVu Sans) technically *has* glyphs for Hebrew
-# final-form letters (ך ם ן ף ץ) but draws them so minimally they're easy to
-# misread as a stray mark rather than a letter - confirmed by rendering the
-# History tab's title and comparing it, zoomed in, against a browser (which
-# has correct Hebrew typography) rendering the same string. Listing known-good
-# Hebrew fonts first fixes it; matplotlib falls back per-glyph down the list,
-# so digits/Latin text still resolve via DejaVu Sans (always bundled, so this
-# never fully breaks even if none of the named fonts are installed). Arial/
-# Tahoma/Segoe UI ship with Windows - the actual target machine - and render
-# Hebrew correctly; the rest are best-effort for other platforms.
-matplotlib.rcParams["font.family"] = [
-    "Arial",
-    "Tahoma",
-    "Segoe UI",
-    "David",
-    "Noto Sans Hebrew",
-    "DejaVu Sans",
-]
 
 
 def rtl(text: str) -> str:
@@ -77,16 +57,6 @@ def rtl(text: str) -> str:
     Uniscribe doing bidi shaping under the hood), so applying this on top
     there double-reverses it back into mirrored text. Hence the platform
     check below, rather than always applying or always skipping it.
-
-    DO NOT use this for matplotlib text (titles/axis labels in the History
-    tab), on any platform. matplotlib's text renderer already applies
-    correct Unicode bidi reordering on its own - confirmed by rendering
-    the same string via matplotlib and via a browser (bidi-correct by
-    construction) and comparing glyph order pixel-by-pixel with a ruler
-    overlay. Wrapping matplotlib text in rtl() double-reverses it into
-    mirrored, unreadable output - this exact bug shipped once and was
-    caught by the user reporting "לאורך" rendering as "ךרואל" in the
-    History graph title.
     """
     if sys.platform.startswith("win"):
         return text
@@ -118,14 +88,11 @@ class App(tk.Tk):
 
         self.convert_tab = ttk.Frame(notebook)
         self.settings_tab = ttk.Frame(notebook)
-        self.history_tab = ttk.Frame(notebook)
         notebook.add(self.convert_tab, text=rtl("המרה"))
         notebook.add(self.settings_tab, text=rtl("הגדרות"))
-        notebook.add(self.history_tab, text=rtl("היסטוריה"))
 
         self._build_settings_tab()
         self._build_convert_tab()
-        self._build_history_tab()
 
     # ---------------------------------------------------------------- header
     def _build_header(self) -> None:
@@ -245,51 +212,6 @@ class App(tk.Tk):
         )
         self.export_button.pack(padx=10, pady=(0, 10), anchor="e")
 
-    # ---------------------------------------------------------------- history tab
-    def _build_history_tab(self) -> None:
-        frame = self.history_tab
-
-        self.figure = Figure(figsize=(7, 4.5), dpi=100)
-        self.history_ax = self.figure.add_subplot(111)
-        self.history_canvas = FigureCanvasTkAgg(self.figure, master=frame)
-        self.history_canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
-
-        self.no_history_label = ttk.Label(
-            frame, text=rtl("עדיין אין היסטוריית המרות - הגרף יופיע אחרי ההמרה הראשונה"), justify="right"
-        )
-
-        self._refresh_history_tab()
-
-    def _refresh_history_tab(self) -> None:
-        entries = load_log_entries()
-        self.history_ax.clear()
-
-        if not entries:
-            self.history_canvas.get_tk_widget().pack_forget()
-            self.no_history_label.pack(padx=10, pady=10, anchor="e")
-            self.history_canvas.draw()
-            return
-
-        self.no_history_label.pack_forget()
-        self.history_canvas.get_tk_widget().pack(fill="both", expand=True, padx=10, pady=10)
-
-        dates = [e.timestamp for e in entries]
-        rates = [e.exchange_rate for e in entries]
-        self.history_ax.plot(dates, rates, marker="o", linestyle="-", color="#1f6feb")
-        # NOT wrapped in rtl() - unlike Tk, matplotlib's text renderer applies
-        # its own correct Unicode bidi reordering. Confirmed by comparing
-        # rendered glyph order pixel-by-pixel against a browser (also
-        # bidi-correct): raw text matched the browser; rtl()-wrapped text
-        # came out mirrored (double-reversed). Passing already-reordered
-        # text here would break it again.
-        self.history_ax.set_title("שער המרה לאורך זמן")
-        self.history_ax.set_xlabel("תאריך")
-        self.history_ax.set_ylabel("שער המרה")
-        self.history_ax.grid(True, alpha=0.3)
-        self.figure.autofmt_xdate()
-        self.figure.tight_layout()
-        self.history_canvas.draw()
-
     def _on_pick_file(self) -> None:
         path = filedialog.askopenfilename(
             title=rtl("בחר את קובץ ההזמנה מהיצרן"),
@@ -379,6 +301,9 @@ class App(tk.Tk):
         )
         save_settings(self.settings)
 
+        # Logged even without a "History" tab to show it - keeps the record
+        # (exchange rate + Rivhit item number, per conversion) available in
+        # case a UI for it comes back later.
         append_log_entry(
             ConversionLogEntry(
                 timestamp=datetime.now(),
@@ -388,7 +313,6 @@ class App(tk.Tk):
                 item_count=len(self.last_result.rivhit_rows),
             )
         )
-        self._refresh_history_tab()
 
         messagebox.showinfo(
             rtl("הצלחה"),

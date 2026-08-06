@@ -23,9 +23,11 @@ from PIL import Image, ImageDraw
 
 OUT_DIR = Path(__file__).parent
 
-# Brand color - the same blue used for the History tab's line/markers, so
-# the logo, the graph, and everything else read as one consistent palette.
+# Brand color for the bird itself.
 COLOR = (31, 111, 235, 255)  # #1f6feb
+# Round black badge behind the bird.
+BADGE_COLOR = (0, 0, 0, 255)
+BADGE_MARGIN_FRAC = 0.04  # badge radius = 0.5 - this, i.e. ~92% of the canvas
 
 # Two symmetric cubic Bezier arcs (left wing, right wing) sharing a center
 # "body dip" point. Coordinates are in an abstract unit square-ish space,
@@ -115,6 +117,10 @@ def render(scale, margin_frac=0.2):
 
     img = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
     draw = ImageDraw.Draw(img)
+
+    badge_pad = canvas * BADGE_MARGIN_FRAC
+    draw.ellipse([badge_pad, badge_pad, canvas - badge_pad, canvas - badge_pad], fill=BADGE_COLOR)
+
     for outline in (left_outline, right_outline):
         img_pts = to_image_space(outline)
         draw.polygon([tuple(p) for p in img_pts], fill=COLOR)
