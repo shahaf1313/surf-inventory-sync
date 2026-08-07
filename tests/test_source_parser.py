@@ -4,6 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
 from surf_inventory_sync.source_parser import (  # noqa: E402
+    ProductRow,
     filter_new_items,
     parse_manufacturer_file,
 )
@@ -46,3 +47,40 @@ def test_auto_sheet_selection_avoids_double_counting_the_consolidated_sheet():
     auto = parse_manufacturer_file(FIXTURE)
     assert len(auto) == len(explicit) == 660
     assert len(filter_new_items(auto)) == 172
+
+
+def _make_row(status: str | None) -> ProductRow:
+    """Minimal ProductRow for exercising is_new_or_new_size() directly -
+    none of the real fixture files happen to contain a price-only-update
+    status, so this is the only way to cover that case."""
+    return ProductRow(
+        ranking="1",
+        sub_group="Group",
+        segment="Segment",
+        item_code="12345",
+        barcode="000",
+        description="Test Item",
+        color_code="1",
+        color_description="Black",
+        size="M",
+        status=status,
+        retail_price=100,
+        wholesale_price=50,
+        order_qty=0,
+        order_amount=0,
+        source_sheet="Sheet",
+    )
+
+
+def test_price_only_updates_are_not_treated_as_new():
+    # A price change on an existing item isn't interesting to dad - only
+    # genuinely new products/sizes/colors are. No real order form has used
+    # this exact status text yet, but the filter must not include it if one
+    # ever does (a naive "contains 'new'" check would wrongly match it).
+    for status in ("New price", "New Price", "NEW PRICE", "new price "):
+        assert _make_row(status).is_new_or_new_size() is False, status
+
+
+def test_genuinely_new_statuses_still_match():
+    for status in ("New", "NEW", "New sizes", "New colour", "New Colour"):
+        assert _make_row(status).is_new_or_new_size() is True, status

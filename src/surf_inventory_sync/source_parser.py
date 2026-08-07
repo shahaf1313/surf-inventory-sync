@@ -81,19 +81,30 @@ class ProductRow:
         return "-".join(p.strip() for p in parts if p is not None)
 
     def is_new_or_new_size(self) -> bool:
-        """True for rows marked as a new item or a newly added size.
+        """True for rows marked as a new item, a newly added size, or a new
+        color - explicitly NOT for rows that are only a price update on an
+        existing item (e.g. a "New price" status), per the user's request:
+        price-only changes aren't interesting, only genuinely new products/
+        variants are.
 
         The manufacturer's "New / Carry over" (or "Status", depending on the
         order form) column is free text and not consistently cased or
         spaced across seasons/brands (seen: "New", "NEW", "New sizes",
         "New colour", "New Colour", "Carry Over ", "Carry over "). We treat
-        any value containing the word "new" (case-insensitive) as new;
-        anything else (including blank) is treated as carry-over and
-        excluded.
+        any value containing the word "new" (case-insensitive) as new,
+        UNLESS it also contains "price" (e.g. a hypothetical "New price" or
+        "New Price" status) - not seen in any real file yet, but the naive
+        substring check would otherwise wrongly include it if one ever
+        shows up, so this is guarded explicitly rather than waiting to hit
+        it in production. Anything else (including blank) is treated as
+        carry-over and excluded.
         """
         if not self.status:
             return False
-        return "new" in self.status.strip().lower()
+        normalized = self.status.strip().lower()
+        if "price" in normalized:
+            return False
+        return "new" in normalized
 
 
 def _normalize_header(raw: object) -> str | None:
